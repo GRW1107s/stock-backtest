@@ -36,7 +36,8 @@
     @media(max-width:540px){main{padding:12px 9px}.card{padding:12px}.metrics{grid-template-columns:repeat(2,1fr)}h1{font-size:21px}.metric .value{font-size:18px}}
   </style>
   <script src="./threshold-engine.js?v=1" defer></script>
-  <script src="./threshold.js?v=1" defer></script>
+  <script src="./threshold.js?v=2" defer></script>
+  <script src="./xy-grid.js?v=1" defer></script>
 </head>
 <body><main>
   <nav class="tabs" aria-label="研究モード">
@@ -52,7 +53,7 @@
     <h2>売買ルール</h2>
     <p><strong>買い：</strong>直近30本の1分足の最高値から x% 下落した瞬間（1分足確定時）にシグナル。次の1分足の始値で買います。</p>
     <p><strong>売り：</strong>買値から y% 上昇したら指値利確。上昇しなければ固定損切り −0.8%、最大25分保有、または前場・後場の終了で手仕舞いします。</p>
-    <p class="sub mini">指値と逆指値が同じ足で成立した場合は損切りを優先。1日最大6回の買い、売却後2分の間隔、場をまたぐ保有なし。価格と出来高は実データのみで、欠損箇所を補完しません。売買には往復コストを差し引きます。</p>
+    <p class="sub mini">指値と逆指値が同じ足で成立した場合は損切りを優先。1日最大3回の買い、売却後2分の間隔、場をまたぐ保有なし。価格と出来高は実データのみで、欠損箇所を補完しません。売買には往復コストを差し引きます。</p>
   </section>
   <section class="card">
     <h2>使用するデータ</h2>
@@ -66,11 +67,35 @@
       <div class="metric"><span class="key">最良得点</span><span class="value" id="bestScore">—</span></div>
     </div>
   </section>
+  <section class="card" id="gridOptimization">
+    <h2>x・yを総当たりで最適化（実データ）</h2>
+    <div class="message" id="gridStatus">2,030通りの x・y について、学習期間と未使用日を分けた結果を読み込んでいます…</div>
+    <div class="metrics">
+      <div class="metric"><span class="key">計算した組み合わせ</span><span class="value" id="gridCount">—</span></div>
+      <div class="metric"><span class="key">全3日で最高得点のx</span><span class="value" id="gridBestX">—</span></div>
+      <div class="metric"><span class="key">全3日で最高得点のy</span><span class="value" id="gridBestY">—</span></div>
+      <div class="metric"><span class="key">全3日の最高得点</span><span class="value" id="gridBestScore">—</span></div>
+      <div class="metric"><span class="key">全3日の売買回数</span><span class="value" id="gridBestTrades">—</span></div>
+    </div>
+    <h2>古い2日で選んで、新しい1日で検証</h2>
+    <div class="scroll"><table>
+      <thead><tr><th>選択基準</th><th>x（買い）</th><th>y（利確）</th><th>学習2日・損益</th><th>未使用1日・損益</th><th>未使用日・売買数</th><th>未使用日・勝率</th></tr></thead>
+      <tbody id="oosRows"><tr><td colspan="7" style="text-align:left">データを確認中</td></tr></tbody>
+    </table></div>
+    <p class="mini sub">パラメータの選択には新しい1日の結果を使いません。「頑健性重視」は x±0.05%、y±0.10% の近傍9通りの得点中央値が高い組み合わせです。1日だけの検証なので再現性は不明です。</p>
+    <h2 style="margin-top:18px">全3日を使った最適化・上位10組</h2>
+    <div class="scroll"><table><thead><tr><th>順位</th><th>x</th><th>y</th><th>得点</th><th>合計損益</th><th>売買回数</th><th>勝率</th><th>最大DD</th></tr></thead>
+    <tbody id="bestGridRows"><tr><td colspan="8" style="text-align:left">データを確認中</td></tr></tbody></table></div>
+    <h2 style="margin-top:18px">x・y別の得点（主要な設定）</h2>
+    <p class="mini sub">縦軸はx（30分高値からの下落率）、横軸はy（買値からの利確率）。プラスは緑、マイナスは赤、取引数不足は灰色。得点は全3日の学習期間内成績です。</p>
+    <div class="scroll"><table id="xyHeatmap" style="min-width:750px"><tbody><tr><td>読込中</td></tr></tbody></table></div>
+    <p class="mini sub">比較条件：直近30分高値からの下落で買い、売りはy%利確・固定−0.8%損切り・25分保有上限・1日最大3回・往復コスト0.10%。損益は売買ごとの率の単純合計で、資産運用利回りではありません。3日で最適だった設定を実運用で採用することは推奨していません。</p>
+  </section>
   <section class="card">
     <h2>3日エピソードを繰り返す</h2>
     <div class="controls">
       <div class="control"><label for="initialX">初期 x（%）</label><input id="initialX" type="number" value="0.60" min="0.15" max="3" step="0.05"></div>
-      <div class="control"><label for="initialY">初期 y（%）</label><input id="initialY" type="number" value="0.50" min="0.10" max="2" step="0.05"></div>
+      <div class="control"><label for="initialY">初期 y（%）</label><input id="initialY" type="number" value="0.50" min="0.10" max="3.5" step="0.05"></div>
       <div class="control"><label for="rounds">繰り返す回数</label><select id="rounds"><option value="10">10回</option><option value="30" selected>30回</option><option value="60">60回</option></select></div>
       <div class="control"><label for="population">1回の候補数</label><select id="population"><option value="8">8組</option><option value="12" selected>12組</option><option value="20">20組</option></select></div>
       <div class="control"><label for="cost">往復コスト（%）</label><input id="cost" type="number" value="0.10" min="0" max="2" step="0.01"></div>
