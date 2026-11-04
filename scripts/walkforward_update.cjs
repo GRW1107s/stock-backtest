@@ -48,10 +48,12 @@ function runUpdate(payload,previous) {
   state.sourceRevisionWarnings=revised;
   const newDays=days.filter(d=>d.date>state.lastEvaluatedDate);
   for(const d of newDays){
-    const result=E.replay(state.weights,[d],CONFIG.costPct);
+    const result=E.replay(state.weights,[d],CONFIG.costPct,true);
     const costSensitivity=CONFIG.sensitivityCostsPct.map(costPct=>({costPct,
       ...summary(E.replay(state.weights,[d],costPct))}));
     state.evaluations.push({date:d.date,...summary(result),costSensitivity,
+      tradeLog:result.trades.map(t=>({entry:t.entry,exit:t.exit,entryPrice:t.entryPrice,
+        exitPrice:t.exitPrice,reason:t.reason,netPct:t.net})),
       source:fingerprint(d),modelTrainedThrough:state.trainedThrough});
     state.pendingDates.push(d.date);
     state.lastEvaluatedDate=d.date;
