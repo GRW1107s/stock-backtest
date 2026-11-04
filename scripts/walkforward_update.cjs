@@ -2,7 +2,11 @@
 /* Incremental score-only walk-forward. Each new day is scored before its
  * candles may be used for a later three-day training block. */
 const E = require('../episode-engine.js');
-const CONFIG = Object.freeze({symbol:'6976.T',costPct:0.10,population:10,chunks:[25,25,50,100],blockDays:3});
+const CONFIG = Object.freeze({symbol:'6976.T',costPct:0.10,
+  // Illustrative round-trip percentages, NOT a broker-specific published schedule.
+  commissionPct:0.02,spreadPct:0.04,slippagePct:0.04,
+  sensitivityCostsPct:[0,0.05,0.10,0.20,0.30],
+  population:10,chunks:[25,25,50,100],blockDays:3});
 function summary(r) {
   return {score:r.fitness,profitPct:r.total,drawdownPct:r.dd,trades:r.n,wins:r.wins,
     winRatePct:r.winRate};
@@ -44,8 +48,10 @@ function runUpdate(payload,previous) {
   const newDays=days.filter(d=>d.date>state.lastEvaluatedDate);
   for(const d of newDays){
     const result=E.replay(state.weights,[d],CONFIG.costPct);
-    state.evaluations.push({date:d.date,...summary(result),source:fingerprint(d),
-      modelTrainedThrough:state.trainedThrough});
+    const costSensitivity=CONFIG.sensitivityCostsPct.map(costPct=>({costPct,
+      ...summary(E.replay(state.weights,[d],costPct))}));
+    state.evaluations.push({date:d.date,...summary(result),costSensitivity,
+      source:fingerprint(d),modelTrainedThrough:state.trainedThrough});
     state.pendingDates.push(d.date);
     state.lastEvaluatedDate=d.date;
     if(state.pendingDates.length===CONFIG.blockDays){
@@ -61,6 +67,9 @@ function runUpdate(payload,previous) {
   }
   state.generatedFrom=payload.updated_at||state.generatedFrom||null;
   const e=state.evaluations;
+  state.oosCostSensitivity=CONFIG.sensitivityCostsPct.map(costPct=>({costPct,
+    profitPct:e.reduce((n,x)=>n+(x.costSensitivity?.find(v=>v.costPct===costPct)?.profitPct||0),0),
+    trades:e.reduce((n,x)=>n+x.trades,0)}));
   state.oosSummary={
     days:e.length,trades:e.reduce((n,x)=>n+x.trades,0),
     wins:e.reduce((n,x)=>n+x.wins,0),
