@@ -1,4 +1,4 @@
-/* Taiyo Yuden 1m research / no-lookahead / chronological 10+10 holdout.
+/* Taiyo Yuden 1m research / no-lookahead / chronological variable-length holdout.
  * No dataset is fabricated. Signal functions ONLY receive history through current close.
  * Orders are made on the next minute's open, or resting stop/target after entry.
  */
@@ -231,26 +231,36 @@
     for(const t of trades){capital+=t.net;peak=Math.max(peak,capital);maxDD=Math.min(maxDD,capital-peak);}
     return {n,mean:sum/n,total:sum,win:positives.length/n*100,pf:loss===0?(gain>0?Infinity:null):gain/loss,dd:maxDD};
   }
+  function splitPeriod(days){
+    const chosen=days.slice(-20);
+    const trainCount=chosen.length===1?1:Math.ceil(chosen.length/2);
+    return {training:chosen.slice(0,trainCount),heldout:chosen.slice(trainCount),trainCount,
+      testCount:chosen.length-trainCount,dayCount:chosen.length,inSample:chosen.length===1};
+  }
   function chooseTrainingConfig(training,costPct,mode){
     const tried=candidates.filter(c=>c.id===mode.id).map(config=>{
       const trades=simulate(training,config,costPct);
       return {config,trades,score:stats(trades)};
     });
-    const eligible=tried.filter(x=>x.score.n>=5);
+    const minimumTrades=Math.min(5,training.length);
+    const eligible=tried.filter(x=>x.score.n>=minimumTrades);
     if(!eligible.length)return null;
     eligible.sort((a,b)=>(b.score.mean-a.score.mean) || (b.score.n-a.score.n));
     return eligible[0];
   }
   function run(days,costPct){
-    const training=days.slice(0,10),heldout=days.slice(10,20);
+    const split=splitPeriod(days),{training,heldout}=split;
     const result=modes.map(mode=>{
       const selected=chooseTrainingConfig(training,costPct,mode);
       if(!selected)return {id:mode.id,label:mode.label,selected:null,training:stats([]),test:stats([]),trades:[]};
-      const newTrades=simulate(heldout,selected.config,costPct);
-      return {id:mode.id,label:mode.label,selected:selected.config,training:selected.score,test:stats(newTrades),trades:newTrades};
+      const newTrades=split.inSample?selected.trades:simulate(heldout,selected.config,costPct);
+      return {id:mode.id,label:mode.label,selected:selected.config,training:selected.score,
+        test:split.inSample?stats([]):stats(newTrades),trades:newTrades};
     });
-    // Sort exclusively by TRAIN performance, not after-the-fact test performance.
-    return result.sort((a,b)=>(b.training.mean??-Infinity)-(a.training.mean??-Infinity));
+    // Ranking depends only on the training segment; never on held-out results.
+    result.sort((a,b)=>(b.training.mean??-Infinity)-(a.training.mean??-Infinity));
+    result.meta=split;
+    return result;
   }
   function drawPath(svgId,values,marks=[]){
     const target=$(svgId),min=Math.min(...values),max=Math.max(...values),span=(max-min)||1;
@@ -286,44 +296,68 @@
   }
   function renderResult(days,results){
     evaluation={days,results};
+    const split=results.meta||splitPeriod(days);
+    const {trainCount,testCount,inSample}=split;
+    $('trainDaysColumn').textContent='学習'+trainCount+'日';
+    $('trainAvgColumn').textContent='学習'+trainCount+'日';
+    for(const id of ['testTradesColumn','testWinColumn','testAvgColumn','testTotalColumn']){
+      $(id).textContent=inSample?'期間外なし':'検証'+testCount+'日';
+    }
+    $('equityTitle').textContent=inSample?'学習期間内の累積損益（参考）':'検証期間の累積損益';
+    $('tradeTitle').textContent=inSample?'取引明細（同日内・参考）':'取引明細（検証'+testCount+'日）';
     const valid=results.filter(x=>x.selected);
     const rows=results.map((r,i)=>{
       const no=r.selected;
-      const desc=no?`閾値 ${no.threshold}% / 利確 ${no.tp}% / 損切り ${no.sl}% / ${no.hold}分`:'最低5取引に達せず検証不可';
+      const desc=no?`閾値 ${no.threshold}% / 利確 ${no.tp}% / 損切り ${no.sl}% / ${no.hold}分`:'学習期間の取引が少なく条件未選択';
       return `<tr class="${i===0?'best':''}"><td><strong>${escape(r.label)}</strong><small>${escape(desc)}</small></td><td>${r.training.n}</td><td>${rate(r.training.mean)}</td><td>${r.test.n}</td><td>${round(r.test.win,1)}${Number.isFinite(r.test.win)?'%':''}</td><td class="${r.test.mean>=0?'pos':'neg'}">${rate(r.test.mean)}</td><td class="${r.test.total>=0?'pos':'neg'}">${rate(r.test.total)}</td><td>${rate(r.test.dd)}</td></tr>`;
     });
     $('resultsRows').innerHTML=rows.join('');
     $('testStatus').textContent=valid.length+'戦略';
-    $('testNote').textContent='後半10取引日は初見検証';
-    $('resultMessage').className='message '+(valid.length?'ok':'warn');
-    $('resultMessage').textContent=valid.length?'学習期間だけで選んだ戦略を、初見の後半10日で評価しました。結果が良くても、検証日数と売買回数が少ないため優位性の確証ではありません。':'学習期間に最低5件の売買が発生する戦略がありません。';
-    $('chartDay').innerHTML=days.slice(10).map(x=>`<option value="${escape(x.date)}">${escape(x.date)}</option>`).join('');
+    $('testNote').textContent=inSample?'1日の同一期間内評価':'過去'+trainCount+'日で選定→後半'+testCount+'日で期間外検証';
+    $('resultMessage').className='message warn';
+    $('resultMessage').textContent=!valid.length?
+      '条件を選ぶのに十分な取引がありません。データの追加を待ってください。':
+      inSample?'1取引日だけの暫定検証です。成績は選定に使った同じ日のもので、未使用データでの検証ではありません。勝てる戦略の発見を意味しません。':
+      '古い'+trainCount+'取引日で選んだ条件を、新しい'+testCount+'取引日で固定評価しました。20日未満のため暫定値です。データ欠損や少数取引・過剰最適化に注意してください。';
+    $('chartDay').innerHTML=(inSample?days:days.slice(trainCount)).map(x=>`<option value="${escape(x.date)}">${escape(x.date)}</option>`).join('');
     $('chartStrategy').innerHTML=results.map(x=>`<option value="${escape(x.id)}">${escape(x.label)}</option>`).join('');
     $('chartDay').disabled=$('chartStrategy').disabled=false;
     $('chartDay').value=days.at(-1).date;
     $('chartStrategy').value=results[0].id;
     renderChart();
   }
+  // A partial day may be used for exploration when at least 60 real bars
+  // exist in ONE session; all missing timestamps remain absent in simulations.
+  function usableDay(day){
+    return day.am.length+day.pm.length>=60&&Math.max(day.am.length,day.pm.length)>=60;
+  }
   function refreshBars(bars,origin){
     allBars=normalizeBars(bars);
-    const groups=groupSessions(allBars),complete=groups.filter(completed);
-    readyDays=complete.slice(-20);
+    const groups=groupSessions(allBars),usable=groups.filter(usableDay);
+    readyDays=usable.slice(-20);
+    const full=readyDays.filter(completed).length;
+    const partial=readyDays.length-full;
+    evaluation=null;
     $('barCount').textContent=allBars.length.toLocaleString('ja-JP');
-    $('dayCount').textContent=complete.length+'日';
-    $('dayRange').textContent=complete.length?`${complete[0].date} 〜 ${complete.at(-1).date}`:'有効な前場・後場を確認できず';
-    $('startBtn').disabled=readyDays.length<20;
-    if(complete.length<20){
-      $('loadMessage').className='message warn';
-      $('loadMessage').textContent=`${origin}：完全性基準を満たす実データ ${complete.length}/20取引日。残り${20-complete.length}日分が必要です。TradingView等の1分足CSVを読み込むか、日次アーカイブが20取引日蓄積するまで検証結果は表示しません。`;
-      $('resultMessage').textContent='20取引日分の実データ不足につき、勝率・期待値は計算していません。';
-      $('resultsRows').innerHTML='<tr><td colspan="8" style="text-align:left">20取引日分のデータが必要です</td></tr>';
-    }else{
-      $('loadMessage').className='message ok';
-      $('loadMessage').textContent=`${origin}：完全性基準を満たす${complete.length}日。最新20取引日（${readyDays[0].date}〜${readyDays[19].date}）を使って検証できます。`;
-    }
+    $('dayCount').textContent=readyDays.length+'日';
+    $('dayRange').textContent=readyDays.length?`${readyDays[0].date} 〜 ${readyDays.at(-1).date}／全日相当${full}日・部分データ${partial}日`:'検証可能な実データなし';
+    $('startBtn').disabled=readyDays.length===0;
+    $('startBtn').textContent=readyDays.length?`${readyDays.length}取引日で${readyDays.length<20?'暫定':''}バックテスト`:'1分足の蓄積待ち';
+    $('loadMessage').className='message '+(readyDays.length<20?'warn':'ok');
+    $('loadMessage').textContent=readyDays.length===0?
+      `${origin}：連続検証に使える1分足が不足しています（同一場内で60本以上が必要）。`:
+      `${origin}：${readyDays.length}取引日・${allBars.length}本。部分データ${partial}日を含む${readyDays.length<20?'暫定検証':'20日検証'}が可能です。欠損部分を補完せず、その場内の実在する足だけで売買を判定します。`;
+    $('testStatus').textContent='未実行';
+    $('testNote').textContent=readyDays.length<2?'期間外検証には2取引日以上必要':'学習期間と期間外検証を時系列で分離';
+    $('resultMessage').textContent=readyDays.length?
+      '「バックテスト」を押して実データで売買を再生できます。短期結果は統計的な優位性を示しません。':
+      '1分足を取得でき次第、結果を計算できます。';
+    $('resultsRows').innerHTML='<tr><td colspan="8" style="text-align:left">バックテスト実行待ち</td></tr>';
+    $('tradeRows').innerHTML='<tr><td colspan="8" style="text-align:left">取引履歴なし</td></tr>';
+    $('chartDay').disabled=$('chartStrategy').disabled=$('exportBtn').disabled=true;
   }
   function evaluate(){
-    if(readyDays.length<20)return;
+    if(readyDays.length<1)return;
     const input=Number($('roundCost').value);
     if(!Number.isFinite(input)||input<0||input>2){$('resultMessage').textContent='往復コストを0〜2%に設定してください。';return;}
     cost=input;
@@ -355,7 +389,7 @@
     }catch(e){$('loadMessage').className='message warn';$('loadMessage').textContent='CSVの読込に失敗：'+e.message;}
   });
   if(typeof globalThis !== 'undefined' && globalThis.__STRATEGY_LAB_TEST__){
-    globalThis.__STRATEGY_LAB_TEST_API__={signal,simulate,run,stats,groupSessions,completed,normalizeBars,fromCsv,candidates};
+    globalThis.__STRATEGY_LAB_TEST_API__={signal,simulate,run,stats,groupSessions,completed,usableDay,splitPeriod,normalizeBars,fromCsv,candidates};
   }
   fetch('./data/taiyo-yuden-1m.json?rev='+Date.now(),{cache:'no-store'}).then(r=>{
     if(!r.ok)throw Error(`HTTP ${r.status}`);
