@@ -2,7 +2,7 @@
 (()=>{
 'use strict';
 const E=globalThis.__THRESHOLD_ENGINE__,$=id=>document.getElementById(id);
-const KEY='taiyo-xy-three-day-v1';
+const KEY='taiyo-xy-three-day-v2';
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const fmt=(n,d=3)=>Number.isFinite(n)?n.toFixed(d):'—';
 const pct=(n,d=3)=>Number.isFinite(n)?((n>0?'+':'')+n.toFixed(d)+'%'):'—';
@@ -106,7 +106,7 @@ async function learn(restart){
   if(!(c>=0&&c<=2)||!Number.isFinite(c)||!(initial.x>=E.X_MIN&&initial.x<=E.X_MAX)||
      !(initial.y>=E.Y_MIN&&initial.y<=E.Y_MAX)||!Number.isFinite(initial.x)||!Number.isFinite(initial.y)){
     $('progress').className='message warn';
-    $('progress').textContent='xは0.15〜3%、yは0.10〜2%、往復コストは0〜2%で指定してください。';return;
+    $('progress').textContent='xは0.15〜3%、yは0.10〜3.5%、往復コストは0〜2%で指定してください。';return;
   }
   if(restart){state=null;save();}
   else capture();
