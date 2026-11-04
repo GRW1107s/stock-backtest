@@ -38,7 +38,7 @@
   @media(max-width:900px){.grid{grid-template-columns:repeat(2,minmax(0,1fr))}.two{grid-template-columns:1fr}}
   @media(max-width:570px){main{padding:16px 9px 35px}.card{padding:13px}.grid{gap:7px}h1{font-size:22px}.metric{padding:10px}.metric .value{font-size:18px}}
   </style>
-  <script src="./app.js?v=1" defer></script>
+  <script src="./app.js?v=2" defer></script>
 </head>
 <body>
 <main>
@@ -51,11 +51,11 @@
     <div id="loadMessage" class="message">保存済み1分足を読み込んでいます…</div>
     <div class="steps"><span class="step">1. 確定済み1分足だけを蓄積</span><span class="step">2. 20取引日を選択</span><span class="step">3. 前半10日で戦略選択</span><span class="step">4. 後半10日を初見検証</span></div>
     <div class="controls">
-      <div class="control" style="flex:1;min-width:250px"><label for="csvInput">過去の1分足をCSVで読み込む（TradingView等）</label><input id="csvInput" type="file" accept=".csv,text/csv"></div>
+      <div class="control" style="flex:1;min-width:250px"><label for="csvInput">過去の1分足CSVを読み込む（J-Quants・TradingView等）</label><input id="csvInput" type="file" accept=".csv,text/csv"></div>
       <div class="control"><label for="roundCost">往復売買コスト（%）</label><input id="roundCost" type="number" min="0" max="2" step="0.01" value="0.10"></div>
       <button id="startBtn" class="primary" disabled>20取引日でバックテスト</button>
     </div>
-    <div class="sub mini" style="margin-top:8px">CSV形式：time,open,high,low,close,volume。時刻は日本時間またはタイムゾーン付きISO、Unix秒・ミリ秒。自動取得にはYahoo Financeの非公式APIを使用（1分足の遡及範囲に制約あり）。</div>
+    <div class="sub mini" style="margin-top:8px">CSV形式：time,open,high,low,close,volume または J-Quants形式 Date,Time,Code,O,H,L,C,Vo。時刻は日本時間またはタイムゾーン付きISO、Unix秒・ミリ秒。自動取得にはYahoo Financeの非公式APIを使用（1分足の遡及範囲に制約あり）。</div>
   </section>
   <div class="grid">
     <div class="metric"><div class="key">有効な1分足の取引日</div><span class="value" id="dayCount">—</span><span class="note" id="dayRange">20日必要</span></div>
