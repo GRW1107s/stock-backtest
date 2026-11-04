@@ -39,6 +39,7 @@ jobs:
       - name: Collect completed Taiyo Yuden one-minute bars
         run: python scripts/update_1m.py
       - name: Commit only verified archive updates
+        if: github.event_name != 'push'
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
