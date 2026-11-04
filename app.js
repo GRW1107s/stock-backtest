@@ -1,0 +1,356 @@
+/* Taiyo Yuden 1m research / no-lookahead / chronological 10+10 holdout.
+ * No dataset is fabricated. Signal functions ONLY receive history through current close.
+ * Orders are made on the next minute's open, or resting stop/target after entry.
+ */
+(() => {
+  'use strict';
+  const $ = id => document.getElementById(id);
+  const escape = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const round = (n, d=2) => Number.isFinite(n) ? n.toFixed(d) : '—';
+  const rate = n => Number.isFinite(n) ? (n>0?'+':'') + n.toFixed(3)+'%' : '—';
+  const formatMoney = n => Number.isFinite(n) ? n.toLocaleString('ja-JP',{maximumFractionDigits:2}) : '—';
+  const candleTime = ts => ts.slice(11,16);
+  const minuteOf = ts => Number(ts.slice(11,13))*60+Number(ts.slice(14,16));
+  const tokyoFmt = new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Tokyo',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hourCycle:'h23'});
+  function jstString(time) {
+    const parts = Object.fromEntries(tokyoFmt.formatToParts(time).map(o=>[o.type,o.value]));
+    return `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}`;
+  }
+  function parseTime(raw) {
+    const x=String(raw ?? '').trim();
+    if(/^\d{10,13}$/.test(x)){
+      const epoch=Number(x)*(x.length<=10?1000:1);
+      const d=new Date(epoch);
+      return Number.isFinite(d.getTime())?jstString(d):null;
+    }
+    if(/^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(?::\d{2})?$/.test(x))return x.replace(' ','T').slice(0,16);
+    const d=new Date(x);
+    return Number.isFinite(d.getTime())?jstString(d):null;
+  }
+  function sameSegment(a,b){
+    return a.slice(0,10)===b.slice(0,10) && Math.abs(minuteOf(b)-minuteOf(a))===1;
+  }
+  function sessionName(t){const m=minuteOf(t);return (m>=540&&m<690)?'am':(m>=750&&m<930)?'pm':null;}
+  function validBar(b){
+    if(!Array.isArray(b)||b.length<6)return false;
+    const [time,o,h,l,c,v]=b;
+    return /^\d{4}-\d\d-\d\dT\d\d:\d\d$/.test(time) && sessionName(time)!==null
+      && [o,h,l,c,v].every(Number.isFinite) && o>0 && h>=Math.max(o,c) && l<=Math.min(o,c)
+      && l>0 && v>=0;
+  }
+  function normalizeBars(data){
+    const map=new Map();
+    for(const raw of data){
+      if(!Array.isArray(raw)||raw.length<6)continue;
+      const row=[parseTime(raw[0]),...[1,2,3,4,5].map(i=>Number(String(raw[i]).replace(/,/g,'')))];
+      if(validBar(row))map.set(row[0],row);
+    }
+    return [...map.values()].sort((a,b)=>a[0].localeCompare(b[0]));
+  }
+  function csvMatrix(source){
+    const lines=[];let row=[],cell='',inQuote=false;
+    for(let i=0;i<source.length;i++){
+      const ch=source[i];
+      if(ch==='"'){if(inQuote&&source[i+1]==='"'){cell+='"';i++;}else inQuote=!inQuote;}
+      else if(ch===','&&!inQuote){row.push(cell);cell='';}
+      else if((ch==='\n'||ch==='\r')&&!inQuote){
+        if(ch==='\r'&&source[i+1]==='\n')i++;
+        row.push(cell);cell='';if(row.some(x=>x.trim()))lines.push(row);row=[];
+      }else cell+=ch;
+    }
+    if(cell||row.length){row.push(cell);if(row.some(x=>x.trim()))lines.push(row);}
+    return lines;
+  }
+  function fromCsv(csv){
+    const table=csvMatrix(csv.replace(/^\uFEFF/,''));
+    if(table.length<2)throw Error('CSVにデータがありません。');
+    const header=table[0].map(x=>x.trim().toLowerCase());
+    const col=(...names)=>header.findIndex(h=>names.includes(h));
+    const indexes=[col('time','timestamp','datetime','date','日時','日付'),col('open','始値'),col('high','高値'),col('low','安値'),col('close','終値'),col('volume','出来高')];
+    if(indexes.some(i=>i<0))throw Error('CSVに time, open, high, low, close, volume の列が必要です。');
+    return normalizeBars(table.slice(1).map(r=>indexes.map(i=>r[i])));
+  }
+  function groupSessions(bars){
+    const grouped=new Map();
+    for(const row of bars){
+      const day=row[0].slice(0,10),part=sessionName(row[0]),key=day+'/'+part;
+      if(!grouped.has(key))grouped.set(key,[]);
+      grouped.get(key).push({t:row[0],o:row[1],h:row[2],l:row[3],c:row[4],v:row[5]});
+    }
+    const days=new Map();
+    for(const [key,rows] of grouped){
+      const [date,part]=key.split('/');
+      if(!days.has(date))days.set(date,{date,am:[],pm:[]});
+      days.get(date)[part]=rows.sort((a,b)=>a.t.localeCompare(b.t));
+    }
+    return [...days.values()].sort((a,b)=>a.date.localeCompare(b.date));
+  }
+  // Strong coverage gate: both continuous Tokyo sessions, >= 290 real minutes.
+  // Missing individual bars may exist but signals never cross missing minute gaps.
+  function completed(day){
+    const am=new Set(day.am.map(x=>candleTime(x.t))),pm=new Set(day.pm.map(x=>candleTime(x.t)));
+    return day.am.length+day.pm.length>=315 && day.am.length>=143 && day.pm.length>=172
+      && ['09:00','10:00','11:20'].every(t=>am.has(t))
+      && ['12:30','14:30','15:25'].every(t=>pm.has(t));
+  }
+  const modes=[
+    {id:'shock',label:'3分急落後の反発買い',thresholds:[0.35,0.60,0.90]},
+    {id:'momentum',label:'5分上昇モメンタム',thresholds:[0.25,0.50,0.80]},
+    {id:'breakout',label:'直近15分高値ブレイク',thresholds:[1.0,1.5,2.0]},
+    {id:'opening',label:'開始15分レンジ突破',thresholds:[1.0,1.4,1.8]},
+    {id:'vwapRevert',label:'VWAP下方乖離から反発',thresholds:[0.3,0.55,0.85]},
+    {id:'vwapCross',label:'VWAP上抜けと出来高',thresholds:[1.0,1.4,1.8]},
+  ];
+  const exitVariants=[
+    {tp:0.40,sl:0.30,hold:5},
+    {tp:0.70,sl:0.40,hold:10},
+    {tp:1.00,sl:0.60,hold:15},
+  ];
+  const candidates=modes.flatMap(m=>m.thresholds.flatMap(th=>exitVariants.map(ex=>({...ex,id:m.id,threshold:th,label:m.label}))));
+  $('candidateCount').textContent=candidates.length+'通り';
+  let allBars=[],readyDays=[],evaluation=null,cost=0.10;
+
+  function vwap(hist){
+    let pv=0,vol=0;
+    for(const x of hist){const w=x.v;pv+=(x.h+x.l+x.c)/3*w;vol+=w;}
+    return vol>0?pv/vol:null;
+  }
+  function medVolume(hist,num=12){
+    const xs=hist.slice(-num).map(x=>x.v).sort((a,b)=>a-b);
+    return xs.length?xs[Math.floor(xs.length/2)]:0;
+  }
+  function signal(history,mode){
+    const i=history.length-1;
+    if(i<20)return false;
+    // Reject signals when any minute in the recent 15-minute lookback is absent.
+    for(let j=i-14;j<=i;j++)if(!sameSegment(history[j-1].t,history[j].t))return false;
+    const b=history[i],p=history[i-1],t=mode.threshold;
+    // A signal at current close uses only historical candles <= i.
+    if(mode.id==='shock'){
+      const past=history[i-3];
+      return (b.c/past.c-1)*100<=-t && b.c>b.o && b.c>p.c;
+    }
+    if(mode.id==='momentum'){
+      const ret=(b.c/history[i-5].c-1)*100;
+      return ret>=t && b.c>p.c && p.c>history[i-2].c && b.v>medVolume(history.slice(0,-1));
+    }
+    if(mode.id==='breakout'){
+      const high=Math.max(...history.slice(i-15,i).map(x=>x.h));
+      const avg=medVolume(history.slice(0,-1));
+      return b.c>high && p.c<=high && avg>0 && b.v>=t*avg;
+    }
+    if(mode.id==='opening'){
+      if(i>100)return false;
+      const first=history.slice(0,15);
+      if(first.length<15)return false;
+      const high=Math.max(...first.map(x=>x.h));
+      const avg=medVolume(history.slice(0,-1));
+      return b.c>high && p.c<=high && avg>0 && b.v>=t*avg;
+    }
+    if(mode.id==='vwapRevert'){
+      const vw=vwap(history);if(!vw)return false;
+      return 100*(vw-b.c)/vw>=t && b.c>b.o && b.c>p.c;
+    }
+    if(mode.id==='vwapCross'){
+      const vw=vwap(history),old=vwap(history.slice(0,-1));
+      const avg=medVolume(history.slice(0,-1));
+      return vw!==null && old!==null && avg>0 && p.c<=old && b.c>vw && b.v>=t*avg;
+    }
+    return false;
+  }
+  function exitTrade(session,entryIndex,mode,costPct){
+    const entry=session[entryIndex],entryPrice=entry.o;
+    const stop=entryPrice*(1-mode.sl/100),target=entryPrice*(1+mode.tp/100);
+    const lastIndex=session.length-1;
+    // Do not carry positions into lunch or the next trading session.
+    for(let j=entryIndex;j<=lastIndex;j++){
+      const bar=session[j];
+      if(j>entryIndex && !sameSegment(session[j-1].t,bar.t)){
+        // Missing minute: flatten at the next observed open; never invent stop fills.
+        return {exitIndex:j,exitTime:bar.t,exitPrice:bar.o,reason:'欠損後手仕舞い',net:(bar.o/entryPrice-1)*100-costPct};
+      }
+      // Time exit occurs at the open of the first bar after `hold` elapsed,
+      // or at the final bar open before lunch/close.
+      if(j-entryIndex>=mode.hold || j===lastIndex){
+        return {exitIndex:j,exitTime:bar.t,exitPrice:bar.o,reason:j===lastIndex?'場末手仕舞い':'時間切れ',net:(bar.o/entryPrice-1)*100-costPct};
+      }
+      // Resting stop/target can execute within the entry bar after entry at open.
+      // Gap below stop executes at bar open (worse), but target gets no favorable gap fill.
+      if(bar.o<=stop || bar.l<=stop){
+        const price=Math.min(bar.o,stop);
+        return {exitIndex:j,exitTime:bar.t,exitPrice:price,reason:'損切り',net:(price/entryPrice-1)*100-costPct};
+      }
+      if(bar.o>=target || bar.h>=target){
+        return {exitIndex:j,exitTime:bar.t,exitPrice:target,reason:'利確',net:(target/entryPrice-1)*100-costPct};
+      }
+    }
+    throw Error('exit horizon failed');
+  }
+  function simulate(days,mode,costPct){
+    const trades=[];
+    for(const day of days){
+      let dayTrades=0;
+      for(const session of [day.am,day.pm]){
+        for(let i=20;i<session.length-2 && dayTrades<6;i++){
+          if(!sameSegment(session[i].t,session[i+1].t))continue;
+          // CRITICAL: the signal only receives a COPY of candles through i.
+          const known=session.slice(0,i+1);
+          if(!signal(known,mode))continue;
+          const k=i+1;
+          const closed=exitTrade(session,k,mode,costPct);
+          trades.push({date:day.date,mode:mode.id,label:mode.label,entry:session[k].t,
+            entryPrice:session[k].o,exit:closed.exitTime,exitPrice:closed.exitPrice,
+            reason:closed.reason,net:closed.net,config:mode});
+          dayTrades++;
+          i=closed.exitIndex+2; // do not open overlapping trades, 2m cooldown
+        }
+      }
+    }
+    return trades;
+  }
+  function stats(trades){
+    const n=trades.length;
+    if(!n)return {n:0,mean:null,total:null,win:null,pf:null,dd:null};
+    const sum=trades.reduce((s,t)=>s+t.net,0),positives=trades.filter(t=>t.net>0);
+    const gain=positives.reduce((s,t)=>s+t.net,0),loss=-trades.filter(t=>t.net<0).reduce((s,t)=>s+t.net,0);
+    let capital=0,peak=0,maxDD=0;
+    for(const t of trades){capital+=t.net;peak=Math.max(peak,capital);maxDD=Math.min(maxDD,capital-peak);}
+    return {n,mean:sum/n,total:sum,win:positives.length/n*100,pf:loss===0?(gain>0?Infinity:null):gain/loss,dd:maxDD};
+  }
+  function chooseTrainingConfig(training,costPct,mode){
+    const tried=candidates.filter(c=>c.id===mode.id).map(config=>{
+      const trades=simulate(training,config,costPct);
+      return {config,trades,score:stats(trades)};
+    });
+    const eligible=tried.filter(x=>x.score.n>=5);
+    if(!eligible.length)return null;
+    eligible.sort((a,b)=>(b.score.mean-a.score.mean) || (b.score.n-a.score.n));
+    return eligible[0];
+  }
+  function run(days,costPct){
+    const training=days.slice(0,10),heldout=days.slice(10,20);
+    const result=modes.map(mode=>{
+      const selected=chooseTrainingConfig(training,costPct,mode);
+      if(!selected)return {id:mode.id,label:mode.label,selected:null,training:stats([]),test:stats([]),trades:[]};
+      const newTrades=simulate(heldout,selected.config,costPct);
+      return {id:mode.id,label:mode.label,selected:selected.config,training:selected.score,test:stats(newTrades),trades:newTrades};
+    });
+    // Sort exclusively by TRAIN performance, not after-the-fact test performance.
+    return result.sort((a,b)=>(b.training.mean??-Infinity)-(a.training.mean??-Infinity));
+  }
+  function drawPath(svgId,values,marks=[]){
+    const target=$(svgId),min=Math.min(...values),max=Math.max(...values),span=(max-min)||1;
+    const left=40,right=625,top=19,bottom=224;
+    const point=(val,i)=>[(left+(right-left)*i/Math.max(1,values.length-1)),(bottom-(val-min)/span*(bottom-top))];
+    const path=values.map((v,i)=>point(v,i).map(z=>z.toFixed(1)).join(',')).join(' ');
+    const line='<line x1="'+left+'" y1="'+bottom+'" x2="'+right+'" y2="'+bottom+'" stroke="#d5dde9"/>';
+    const txt='<text x="'+left+'" y="12" fill="#64748b" font-size="11">高 '+round(max)+'</text><text x="'+left+'" y="247" fill="#64748b" font-size="11">低 '+round(min)+'</text>';
+    const colored=marks.map(m=>{const [x,y]=point(m.value,m.index);return '<circle cx="'+x+'" cy="'+y+'" r="4" fill="'+(m.buy?'#087c64':'#b63352')+'"><title>'+escape(m.title||'')+'</title></circle>';}).join('');
+    target.innerHTML=line+'<polyline points="'+path+'" fill="none" stroke="#3971b5" stroke-width="2" stroke-linejoin="round"/>'+colored+txt;
+  }
+  function drawEquity(r){
+    if(!r||!r.trades.length){$('equityChart').innerHTML='<text x="20" y="35" fill="#64748b">検証期間の取引がありません</text>';return;}
+    let sum=0;const values=[0,...r.trades.map(t=>(sum+=t.net))];drawPath('equityChart',values);
+  }
+  function renderChart(){
+    if(!evaluation)return;
+    const date=$('chartDay').value,r=evaluation.results.find(x=>x.id===$('chartStrategy').value);
+    const day=evaluation.days.find(d=>d.date===date);
+    if(!day){$('priceChart').innerHTML='<text x="20" y="35">対象日がありません</text>';return;}
+    const all=[...day.am,...day.pm],close=all.map(x=>x.c);
+    const marks=[];
+    for(const trade of (r?.trades||[]).filter(x=>x.date===date)){
+      const k=all.findIndex(x=>x.t===trade.entry),j=all.findIndex(x=>x.t===trade.exit);
+      if(k>=0)marks.push({buy:true,index:k,value:trade.entryPrice,title:`買い ${trade.entry}`});
+      if(j>=0)marks.push({buy:false,index:j,value:trade.exitPrice,title:`売り ${trade.exit} ${rate(trade.net)}`});
+    }
+    drawPath('priceChart',close,marks);
+    drawEquity(r);
+    const body=$('tradeRows');
+    body.innerHTML=r?.trades.length?r.trades.map(t=>`<tr><td>${escape(t.date)}</td><td>${escape(t.label)}</td><td>${escape(candleTime(t.entry))}</td><td>${formatMoney(t.entryPrice)}</td><td>${escape(candleTime(t.exit))}</td><td>${formatMoney(t.exitPrice)}</td><td>${escape(t.reason)}</td><td class="${t.net>=0?'pos':'neg'}">${rate(t.net)}</td></tr>`).join(''):'<tr><td colspan="8" style="text-align:left">該当する取引はありません</td></tr>';
+    $('exportBtn').disabled=!(r?.trades?.length);
+  }
+  function renderResult(days,results){
+    evaluation={days,results};
+    const valid=results.filter(x=>x.selected);
+    const rows=results.map((r,i)=>{
+      const no=r.selected;
+      const desc=no?`閾値 ${no.threshold}% / 利確 ${no.tp}% / 損切り ${no.sl}% / ${no.hold}分`:'最低5取引に達せず検証不可';
+      return `<tr class="${i===0?'best':''}"><td><strong>${escape(r.label)}</strong><small>${escape(desc)}</small></td><td>${r.training.n}</td><td>${rate(r.training.mean)}</td><td>${r.test.n}</td><td>${round(r.test.win,1)}${Number.isFinite(r.test.win)?'%':''}</td><td class="${r.test.mean>=0?'pos':'neg'}">${rate(r.test.mean)}</td><td class="${r.test.total>=0?'pos':'neg'}">${rate(r.test.total)}</td><td>${rate(r.test.dd)}</td></tr>`;
+    });
+    $('resultsRows').innerHTML=rows.join('');
+    $('testStatus').textContent=valid.length+'戦略';
+    $('testNote').textContent='後半10取引日は初見検証';
+    $('resultMessage').className='message '+(valid.length?'ok':'warn');
+    $('resultMessage').textContent=valid.length?'学習期間だけで選んだ戦略を、初見の後半10日で評価しました。結果が良くても、検証日数と売買回数が少ないため優位性の確証ではありません。':'学習期間に最低5件の売買が発生する戦略がありません。';
+    $('chartDay').innerHTML=days.slice(10).map(x=>`<option value="${escape(x.date)}">${escape(x.date)}</option>`).join('');
+    $('chartStrategy').innerHTML=results.map(x=>`<option value="${escape(x.id)}">${escape(x.label)}</option>`).join('');
+    $('chartDay').disabled=$('chartStrategy').disabled=false;
+    $('chartDay').value=days.at(-1).date;
+    $('chartStrategy').value=results[0].id;
+    renderChart();
+  }
+  function refreshBars(bars,origin){
+    allBars=normalizeBars(bars);
+    const groups=groupSessions(allBars),complete=groups.filter(completed);
+    readyDays=complete.slice(-20);
+    $('barCount').textContent=allBars.length.toLocaleString('ja-JP');
+    $('dayCount').textContent=complete.length+'日';
+    $('dayRange').textContent=complete.length?`${complete[0].date} 〜 ${complete.at(-1).date}`:'有効な前場・後場を確認できず';
+    $('startBtn').disabled=readyDays.length<20;
+    if(complete.length<20){
+      $('loadMessage').className='message warn';
+      $('loadMessage').textContent=`${origin}：完全性基準を満たす実データ ${complete.length}/20取引日。残り${20-complete.length}日分が必要です。TradingView等の1分足CSVを読み込むか、日次アーカイブが20取引日蓄積するまで検証結果は表示しません。`;
+      $('resultMessage').textContent='20取引日分の実データ不足につき、勝率・期待値は計算していません。';
+      $('resultsRows').innerHTML='<tr><td colspan="8" style="text-align:left">20取引日分のデータが必要です</td></tr>';
+    }else{
+      $('loadMessage').className='message ok';
+      $('loadMessage').textContent=`${origin}：完全性基準を満たす${complete.length}日。最新20取引日（${readyDays[0].date}〜${readyDays[19].date}）を使って検証できます。`;
+    }
+  }
+  function evaluate(){
+    if(readyDays.length<20)return;
+    const input=Number($('roundCost').value);
+    if(!Number.isFinite(input)||input<0||input>2){$('resultMessage').textContent='往復コストを0〜2%に設定してください。';return;}
+    cost=input;
+    $('resultMessage').className='message';$('resultMessage').textContent='時系列に売買条件を評価しています…';
+    // defer one frame so loading state renders
+    setTimeout(()=>{
+      const results=run(readyDays,cost);
+      renderResult(readyDays,results);
+    },20);
+  }
+  $('startBtn').addEventListener('click',evaluate);
+  $('chartDay').addEventListener('change',renderChart);
+  $('chartStrategy').addEventListener('change',renderChart);
+  $('exportBtn').addEventListener('click',()=>{
+    if(!evaluation)return;
+    const s=evaluation.results.find(x=>x.id===$('chartStrategy').value);if(!s?.trades.length)return;
+    const header=['date','strategy','entry','entry_price','exit','exit_price','reason','net_pct'];
+    const lines=[header.join(','),...s.trades.map(x=>[x.date,x.mode,x.entry,x.entryPrice,x.exit,x.exitPrice,x.reason,x.net.toFixed(5)].join(','))];
+    const blob=new Blob(['\uFEFF'+lines.join('\r\n')],{type:'text/csv;charset=utf-8'});
+    const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='taiyo-yuden-test-trades.csv';a.click();URL.revokeObjectURL(a.href);
+  });
+  $('csvInput').addEventListener('change',async()=>{
+    const file=$('csvInput').files?.[0];if(!file)return;
+    try{
+      const parsed=fromCsv(await file.text());
+      if(!parsed.length)throw Error('日本市場の立会時間に該当する有効なOHLCVがありません。');
+      const merged=normalizeBars([...allBars,...parsed]);
+      evaluation=null;refreshBars(merged,`CSV ${file.name}`);
+    }catch(e){$('loadMessage').className='message warn';$('loadMessage').textContent='CSVの読込に失敗：'+e.message;}
+  });
+  if(typeof globalThis !== 'undefined' && globalThis.__STRATEGY_LAB_TEST__){
+    globalThis.__STRATEGY_LAB_TEST_API__={signal,simulate,run,stats,groupSessions,completed,normalizeBars,fromCsv,candidates};
+  }
+  fetch('./data/taiyo-yuden-1m.json?rev='+Date.now(),{cache:'no-store'}).then(r=>{
+    if(!r.ok)throw Error(`HTTP ${r.status}`);
+    return r.json();
+  }).then(p=>{
+    if(p.symbol!=='6976.T'||p.interval!=='1m'||!Array.isArray(p.bars))throw Error('1分足アーカイブの形式が違います。');
+    refreshBars(p.bars,'GitHub保存データ');
+  }).catch(e=>{
+    $('loadMessage').className='message warn';
+    $('loadMessage').textContent='保存データを読み込めません：'+e.message+'。CSVからの読み込みは可能です。';
+  });
+})();
