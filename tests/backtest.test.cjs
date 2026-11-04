@@ -81,3 +81,33 @@ test('A fully formed session may end at 15:24 without a 15:25 candle',()=>{
  assert.equal(sessions[0].pm.at(-1).t,day+'T15:24');
  assert.ok(engine.completed(sessions[0]));
 });
+
+test('Short exploratory dataset accepts one partial-session day without reporting out-of-sample validation',()=>{
+ const bars=daily('2026-10-01',1).slice(-69);
+ const day=engine.groupSessions(engine.normalizeBars(bars))[0];
+ assert.equal(day.am.length,0);
+ assert.equal(day.pm.length,69);
+ assert.ok(engine.usableDay(day));
+ assert.equal(engine.completed(day),false);
+ const out=engine.run([day],0.1);
+ assert.equal(out.meta.inSample,true);
+ assert.equal(out.meta.trainCount,1);
+ assert.equal(out.meta.testCount,0);
+ assert.ok(out.every(x=>x.test.n===0));
+});
+test('Two and three observed days split chronologically, without holdout leakage',()=>{
+ const all=engine.groupSessions(engine.normalizeBars(makeTwenty()));
+ for(const n of [2,3,7,19,20]){
+  const out=engine.run(all.slice(0,n),0.1);
+  assert.equal(out.meta.dayCount,n);
+  const cutoff=Math.ceil(n/2);
+  assert.equal(out.meta.trainCount,cutoff);
+  assert.equal(out.meta.testCount,n-cutoff);
+  const firstTest=all[cutoff].date;
+  assert.ok(out.every(x=>x.trades.every(tr=>tr.date>=firstTest)));
+ }
+});
+test('Non-trading or tiny datasets remain excluded even in provisional mode',()=>{
+ const day=engine.groupSessions(engine.normalizeBars(daily('2026-10-01',1).slice(0,30)))[0];
+ assert.equal(engine.usableDay(day),false);
+});
