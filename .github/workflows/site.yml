@@ -32,7 +32,10 @@ jobs:
         with:
           python-version: '3.12'
       - name: Validate no-lookahead strategy engine
-        run: node --test tests/*.test.cjs
+        run: |
+          node --check episode-engine.js
+          node --check episode.js
+          node --test tests/*.test.cjs
       - name: Collect completed Taiyo Yuden one-minute bars
         run: python scripts/update_1m.py
       - name: Commit only verified archive updates
@@ -49,6 +52,10 @@ jobs:
           mkdir -p site/data
           cp index.html app.js episode.html episode.js episode-engine.js site/
           cp data/taiyo-yuden-1m.json site/data/
+      - name: Run 30 score-only episodes against archived actual candles
+        run: |
+          node scripts/episode_preview.cjs > site/data/episode-preview.json
+          cat site/data/episode-preview.json
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v4
         with:
