@@ -62,3 +62,19 @@ test('CSV with Unix timestamps (UTC) is normalized to JST',()=>{
  assert.equal(bars.length,1);
  assert.equal(bars[0][0],'2026-10-01T09:00');
 });
+
+test('J-Quants minute CSV with separate Date and Time, abbreviated OHLCV, and code filtering',()=>{
+ const csv='Date,Time,Code,O,H,L,C,Vo,Va\\n2026-10-21,09:00,69760,1000,1006,998,1002,32100,32160000\\n2026-10-21,09:01,69760,1002,1005,998,1001,15200,15200000\\n2026-10-21,09:02,86970,2000,2005,1990,2001,45000,90000000';
+ const bars=engine.fromCsv(csv);
+ assert.equal(bars.length,2);
+ assert.equal(bars[0][0],'2026-10-21T09:00');
+ assert.equal(bars[0][5],32100);
+});
+test('A fully formed session may end at 15:24 without a 15:25 candle',()=>{
+ const day='2026-10-21';
+ const rows=daily(day,0).filter(x=>x[0].slice(11,16)<='15:24');
+ const sessions=engine.groupSessions(engine.normalizeBars(rows));
+ assert.equal(sessions.length,1);
+ assert.equal(sessions[0].pm.at(-1).t,day+'T15:24');
+ assert.ok(engine.completed(sessions[0]));
+});
