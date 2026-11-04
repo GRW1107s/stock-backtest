@@ -12,6 +12,7 @@ on:
       - 'walkforward.js'
       - 'threshold.js'
       - 'threshold-engine.js'
+      - 'xy-grid.js'
       - 'data/**'
       - 'scripts/**'
       - 'tests/**'
@@ -43,6 +44,8 @@ jobs:
           node --check scripts/walkforward_update.cjs
           node --check threshold-engine.js
           node --check threshold.js
+          node --check xy-grid.js
+          node --check scripts/xy_grid_search.cjs
           node --test tests/*.test.cjs
       - name: Collect completed Taiyo Yuden one-minute bars
         run: python scripts/update_1m.py
@@ -61,12 +64,16 @@ jobs:
       - name: Stage standalone site
         run: |
           mkdir -p site/data
-          cp index.html app.js episode.html threshold.js threshold-engine.js walkforward.html walkforward.js site/
+          cp index.html app.js episode.html threshold.js threshold-engine.js xy-grid.js walkforward.html walkforward.js site/
           cp data/taiyo-yuden-1m.json data/walkforward-state.json site/data/
       - name: Run 30 x/y score-only episodes against archived actual candles
         run: |
           node scripts/threshold_preview.cjs > site/data/threshold-preview.json
           cat site/data/threshold-preview.json
+      - name: Exhaustive x/y sweep with chronological train/test split
+        run: |
+          node scripts/xy_grid_search.cjs > site/data/xy-grid.json
+          node -e "const a=require('./site/data/xy-grid.json'); console.log(JSON.stringify({count:a.search.gridSize,dates:a.dates,trainingBest:a.trainingBest,test:a.testForTrainingBest,robust:a.trainingRobust,fullBest:a.fullBest,fullRobust:a.fullRobust},null,2))"
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v4
         with:
