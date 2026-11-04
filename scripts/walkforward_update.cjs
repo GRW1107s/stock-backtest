@@ -2,10 +2,11 @@
 /* Incremental score-only walk-forward. Each new day is scored before its
  * candles may be used for a later three-day training block. */
 const E = require('../episode-engine.js');
-const CONFIG = Object.freeze({symbol:'6976.T',costPct:0.10,
-  // Illustrative round-trip percentages, NOT a broker-specific published schedule.
-  commissionPct:0.02,spreadPct:0.04,slippagePct:0.04,
-  sensitivityCostsPct:[0,0.05,0.10,0.20,0.30],
+const CONFIG = Object.freeze({symbol:'6976.T',costPct:0.06,
+  // SBI same-day margin buy, closed intraday: commission=0 and interest=0.
+  // Execution friction below is an ASSUMPTION, not an SBI published rate.
+  commissionPct:0,interestPct:0,spreadPct:0.02,slippagePct:0.04,
+  sensitivityCostsPct:[0,0.03,0.06,0.10,0.20],
   population:10,chunks:[25,25,50,100],blockDays:3});
 function summary(r) {
   return {score:r.fitness,profitPct:r.total,drawdownPct:r.dd,trades:r.n,wins:r.wins,
