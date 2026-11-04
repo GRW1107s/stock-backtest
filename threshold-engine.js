@@ -6,7 +6,7 @@
  */
 (function(root){
 'use strict';
-const WINDOW=30, X_MIN=0.15, X_MAX=3.00, Y_MIN=0.10, Y_MAX=2.00;
+const WINDOW=30, X_MIN=0.15, X_MAX=3.00, Y_MIN=0.10, Y_MAX=3.50;
 const STOP_PCT=0.80, HOLD_MINUTES=25, COST_DEFAULT=0.10;
 const minute=t=>Number(t.slice(11,13))*60+Number(t.slice(14,16));
 const segment=t=>{const n=minute(t);return n>=540&&n<690?'am':n>=750&&n<930?'pm':null;};
@@ -80,7 +80,7 @@ function replay(params,days,costPct=COST_DEFAULT,withTrades=false){
           if(bar.o>=target||bar.h>=target){close(i,target,'y%利確');continue;}
           continue;
         }
-        if(entries>=6||i>=session.length-2||i<=cooldown)continue;
+        if(entries>=3||i>=session.length-2||i<=cooldown)continue;
         if(!adjacent(bar,session[i+1]))continue;
         if(dropSignal(session,i,params.x)){
           position={index:i+1,time:session[i+1].t,price:session[i+1].o};
