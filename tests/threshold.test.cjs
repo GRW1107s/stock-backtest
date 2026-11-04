@@ -84,7 +84,8 @@ test('Continue from the same x/y rather than resetting parameters',()=>{
 });
 test('No-trade rule is penalized, and invalid parameters and four-day training rejected',()=>{
   const ds=E.groupSessions(rows);
-  assert.equal(E.replay({x:3.0,y:2.0},ds,.1).score,-0.9);
+  const flatDay=E.groupSessions(day('2026-11-04',2).map(b=>[b[0],100,100,100,100,b[5]]));
+  assert.equal(E.replay({x:3.0,y:2.0},flatDay,.1).score,-0.9);
   assert.throws(()=>E.replay({x:0,y:.2},ds,.1));
   assert.throws(()=>E.train([...ds,E.groupSessions(day('2026-11-04',2))[0]],null,1,8,.1),/1〜3/);
 });
