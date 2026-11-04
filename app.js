@@ -66,9 +66,23 @@
     if(table.length<2)throw Error('CSVにデータがありません。');
     const header=table[0].map(x=>x.trim().toLowerCase());
     const col=(...names)=>header.findIndex(h=>names.includes(h));
-    const indexes=[col('time','timestamp','datetime','date','日時','日付'),col('open','始値'),col('high','高値'),col('low','安値'),col('close','終値'),col('volume','出来高')];
-    if(indexes.some(i=>i<0))throw Error('CSVに time, open, high, low, close, volume の列が必要です。');
-    return normalizeBars(table.slice(1).map(r=>indexes.map(i=>r[i])));
+    const dateIndex=col('date','日付'),timeIndex=col('time','時刻');
+    const fullTime=col('timestamp','datetime','日時');
+    const prices=[col('open','o','始値'),col('high','h','高値'),col('low','l','安値'),col('close','c','終値'),col('volume','vo','出来高')];
+    const codeIndex=col('code','銘柄コード');
+    if(prices.some(i=>i<0) || (fullTime<0 && dateIndex<0 && timeIndex<0)){
+      throw Error('CSVに時刻と四本値・出来高が必要です。J-Quantsの Date,Time,Code,O,H,L,C,Vo 形式にも対応します。');
+    }
+    const mapped=table.slice(1).filter(r=>{
+      if(codeIndex<0)return true;
+      return ['6976','69760'].includes(String(r[codeIndex]??'').trim());
+    }).map(r=>{
+      let time=fullTime>=0?r[fullTime]:dateIndex>=0&&timeIndex>=0?
+        String(r[dateIndex]??'').trim()+'T'+String(r[timeIndex]??'').trim():
+        String(r[(timeIndex>=0?timeIndex:dateIndex)]??'').trim();
+      return [time,...prices.map(i=>r[i])];
+    });
+    return normalizeBars(mapped);
   }
   function groupSessions(bars){
     const grouped=new Map();
@@ -85,13 +99,13 @@
     }
     return [...days.values()].sort((a,b)=>a.date.localeCompare(b.date));
   }
-  // Strong coverage gate: both continuous Tokyo sessions, >= 290 real minutes.
+  // Strong coverage gate: both continuous Tokyo sessions, ~315+ real minutes.\n  // JPX's last continuous-trading minute is 15:24; 15:30 is a separate auction print.
   // Missing individual bars may exist but signals never cross missing minute gaps.
   function completed(day){
     const am=new Set(day.am.map(x=>candleTime(x.t))),pm=new Set(day.pm.map(x=>candleTime(x.t)));
     return day.am.length+day.pm.length>=315 && day.am.length>=143 && day.pm.length>=172
       && ['09:00','10:00','11:20'].every(t=>am.has(t))
-      && ['12:30','14:30','15:25'].every(t=>pm.has(t));
+      && ['12:30','14:30','15:24'].every(t=>pm.has(t));
   }
   const modes=[
     {id:'shock',label:'3分急落後の反発買い',thresholds:[0.35,0.60,0.90]},
