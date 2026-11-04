@@ -149,6 +149,28 @@
     const a=document.createElement('a');a.href=URL.createObjectURL(blob);
     a.download='taiyo-6976-episode-policy.json';a.click();URL.revokeObjectURL(a.href);
   });
+  function showExample(p){
+    if(!p||!Array.isArray(p.dates)||!sourceDays.length)return;
+    const actual=sourceDays.slice(-3).map(d=>d.date);
+    if(actual.join('/')!==p.dates.map(d=>d.date).join('/')){
+      $('examplePreview').className='message warn';
+      $('examplePreview').textContent='公開済みの30回試行例は現在のデータと日付が異なるため、比較対象外です。';
+      return;
+    }
+    $('examplePreview').className='message warn';
+    $('examplePreview').textContent='実データでの試行例（'+p.generations+'回 × '+p.population+'候補、初見検証ではありません）：'+
+      '初期得点 '+number(p.initial.score,3)+' → 学習後 '+number(p.final.score,3)+
+      '（改善 '+number(p.improvement,3)+'点）。学習期間内の合計損益 '+pct(p.final.totalPct)+
+      '／売買 '+p.final.tradeCount+'回。繰り返し得点が上がっても、将来の成績を示すものではありません。';
+  }
+  let example=null;
+  fetch('./data/episode-preview.json?rev='+Date.now(),{cache:'no-store'}).then(r=>{
+    if(!r.ok)throw Error('HTTP '+r.status);
+    return r.json();
+  }).then(p=>{example=p;showExample(p);}).catch(e=>{
+    $('examplePreview').className='message warn';
+    $('examplePreview').textContent='自動試行例を取得できません。手動での学習は利用できます。';
+  });
   state=load();
   fetch('./data/taiyo-yuden-1m.json?rev='+Date.now(),{cache:'no-store'}).then(r=>{
     if(!r.ok)throw Error('HTTP '+r.status);return r.json();
@@ -165,7 +187,7 @@
       (days.length<3?'現状は3日未満での暫定実験です。':'同じ3取引日を繰り返し再生します。'):
       '1分足が足りません。1場60本以上の実データが必要です。';
     if(state&&Number.isFinite(state.cost)){$('cost').value=state.cost;cost=state.cost;}
-    preview(state);updateHoldout();buttons();
+    preview(state);updateHoldout();showExample(example);buttons();
   }).catch(e=>{
     $('dataMessage').className='message warn';
     $('dataMessage').textContent='データの読込に失敗しました：'+e.message;
