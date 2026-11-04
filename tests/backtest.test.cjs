@@ -64,7 +64,10 @@ test('CSV with Unix timestamps (UTC) is normalized to JST',()=>{
 });
 
 test('J-Quants minute CSV with separate Date and Time, abbreviated OHLCV, and code filtering',()=>{
- const csv='Date,Time,Code,O,H,L,C,Vo,Va\\n2026-10-21,09:00,69760,1000,1006,998,1002,32100,32160000\\n2026-10-21,09:01,69760,1002,1005,998,1001,15200,15200000\\n2026-10-21,09:02,86970,2000,2005,1990,2001,45000,90000000';
+ const csv=`Date,Time,Code,O,H,L,C,Vo,Va
+2026-10-21,09:00,69760,1000,1006,998,1002,32100,32160000
+2026-10-21,09:01,69760,1002,1005,998,1001,15200,15200000
+2026-10-21,09:02,86970,2000,2005,1990,2001,45000,90000000`;
  const bars=engine.fromCsv(csv);
  assert.equal(bars.length,2);
  assert.equal(bars[0][0],'2026-10-21T09:00');
