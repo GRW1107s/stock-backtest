@@ -8,6 +8,8 @@ on:
       - 'episode.html'
       - 'episode.js'
       - 'episode-engine.js'
+      - 'walkforward.html'
+      - 'walkforward.js'
       - 'threshold.js'
       - 'threshold-engine.js'
       - 'data/**'
@@ -37,17 +39,21 @@ jobs:
         run: |
           node --check episode-engine.js
           node --check episode.js
+          node --check walkforward.js
+          node --check scripts/walkforward_update.cjs
           node --check threshold-engine.js
           node --check threshold.js
           node --test tests/*.test.cjs
       - name: Collect completed Taiyo Yuden one-minute bars
         run: python scripts/update_1m.py
+      - name: Record blind test before three-day incremental retraining
+        run: node scripts/walkforward_update.cjs
       - name: Commit only verified archive updates
         if: github.event_name != 'push'
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add data/taiyo-yuden-1m.json
+          git add data/taiyo-yuden-1m.json data/walkforward-state.json
           if ! git diff --cached --quiet; then
             git commit -m 'data: append verified Taiyo Yuden 1m archive'
             git push origin HEAD:main
@@ -55,8 +61,8 @@ jobs:
       - name: Stage standalone site
         run: |
           mkdir -p site/data
-          cp index.html app.js episode.html threshold.js threshold-engine.js site/
-          cp data/taiyo-yuden-1m.json site/data/
+          cp index.html app.js episode.html threshold.js threshold-engine.js walkforward.html walkforward.js site/
+          cp data/taiyo-yuden-1m.json data/walkforward-state.json site/data/
       - name: Run 30 x/y score-only episodes against archived actual candles
         run: |
           node scripts/threshold_preview.cjs > site/data/threshold-preview.json
