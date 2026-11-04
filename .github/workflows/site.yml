@@ -1,0 +1,61 @@
+name: Taiyo Yuden 1-minute backtest and Pages
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'index.html'
+      - 'app.js'
+      - 'data/**'
+      - 'scripts/**'
+      - 'tests/**'
+      - '.github/workflows/site.yml'
+  workflow_dispatch:
+  schedule:
+    - cron: '50 7 * * 1-5' # 16:50 JST, after Tokyo close
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+concurrency:
+  group: strategy-lab-pages
+  cancel-in-progress: false
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Validate no-lookahead strategy engine
+        run: node --test tests/backtest.test.cjs
+      - name: Collect completed Taiyo Yuden one-minute bars
+        run: python scripts/update_1m.py
+      - name: Commit only verified archive updates
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add data/taiyo-yuden-1m.json
+          if ! git diff --cached --quiet; then
+            git commit -m 'data: append verified Taiyo Yuden 1m archive'
+            git push origin HEAD:main
+          fi
+      - name: Stage standalone site
+        run: |
+          mkdir -p site/data
+          cp index.html app.js site/
+          cp data/taiyo-yuden-1m.json site/data/
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: site
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
