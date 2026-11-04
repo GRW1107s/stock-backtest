@@ -147,7 +147,57 @@
         "last": "2026-11-04T15:24",
         "lastClose": 7571
       },
-      "modelTrainedThrough": "2026-11-02"
+      "modelTrainedThrough": "2026-11-02",
+      "tradeLog": [
+        {
+          "entry": "2026-11-04T09:33",
+          "exit": "2026-11-04T09:34",
+          "entryPrice": 7597,
+          "exitPrice": 7554,
+          "reason": "方策が売却",
+          "netPct": -0.6260128998288828
+        },
+        {
+          "entry": "2026-11-04T09:52",
+          "exit": "2026-11-04T09:53",
+          "entryPrice": 7541,
+          "exitPrice": 7551,
+          "reason": "方策が売却",
+          "netPct": 0.07260840737303603
+        },
+        {
+          "entry": "2026-11-04T09:56",
+          "exit": "2026-11-04T09:58",
+          "entryPrice": 7544,
+          "exitPrice": 7619.4400000000005,
+          "reason": "利確",
+          "netPct": 0.9400000000000008
+        },
+        {
+          "entry": "2026-11-04T10:01",
+          "exit": "2026-11-04T10:02",
+          "entryPrice": 7568,
+          "exitPrice": 7558,
+          "reason": "方策が売却",
+          "netPct": -0.19213530655391547
+        },
+        {
+          "entry": "2026-11-04T10:57",
+          "exit": "2026-11-04T10:58",
+          "entryPrice": 7265,
+          "exitPrice": 7255,
+          "reason": "方策が売却",
+          "netPct": -0.19764624913971124
+        },
+        {
+          "entry": "2026-11-04T11:02",
+          "exit": "2026-11-04T11:03",
+          "entryPrice": 7326,
+          "exitPrice": 7307,
+          "reason": "方策が売却",
+          "netPct": -0.319350259350255
+        }
+      ]
     }
   ],
   "retrainings": [],
