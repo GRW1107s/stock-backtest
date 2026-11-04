@@ -1,0 +1,9 @@
+{
+  "symbol": "6976.T",
+  "interval": "1m",
+  "time_zone": "Asia/Tokyo",
+  "updated_at": null,
+  "source": "Yahoo Finance unofficial chart API (rolling archive; CSV upload can supply prior sessions)",
+  "bars": [],
+  "fetch_errors": []
+}
