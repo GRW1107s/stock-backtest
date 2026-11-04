@@ -27,12 +27,15 @@
     }
     return [...map.values()].sort((a,b)=>a.date.localeCompare(b.date));
   }
+  // A session is usable with minor missing 5-minute bars. Signals will not
+  // bridge a missing interval. Require broad morning and afternoon coverage,
+  // but do not insist on an isolated exact-timestamp print.
   function completed(day){
-    const am=new Set(day.am.map(x=>x.t.slice(11,16)));
-    const pm=new Set(day.pm.map(x=>x.t.slice(11,16)));
-    return day.am.length>=27&&day.pm.length>=32&&
-      ['09:00','09:30','11:25'].every(x=>am.has(x))&&
-      ['12:30','14:00','15:20'].every(x=>pm.has(x));
+    return day.am.length>=26&&day.pm.length>=29&&
+      day.am[0].t.slice(11,16)<='09:10'&&
+      day.am.at(-1).t.slice(11,16)>='11:15'&&
+      day.pm[0].t.slice(11,16)<='12:40'&&
+      day.pm.at(-1).t.slice(11,16)>='15:10';
   }
   function dropSignal(s,i,x){
     if(i<LOOKBACK)return false;
