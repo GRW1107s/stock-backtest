@@ -2,108 +2,105 @@
 <html lang="ja">
 <head>
   <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>3日エピソード学習 | 太陽誘電 1分足</title>
-  <meta name="description" content="太陽誘電の1分足で、3取引日の最終得点だけを使って売買方策を進化させる研究環境">
+  <title>3日反復学習 | 太陽誘電 x%下落買い・y%利確</title>
+  <meta name="description" content="太陽誘電6976の実際の1分足で、x%下がったら買い、y%上がったら売る数値を3取引日の得点だけで探索">
   <style>
-    :root{--bg:#f6f8fb;--ink:#1e293b;--sub:#64748b;--line:#dae3ee;--blue:#245bc7;--red:#b63b52;--green:#078264}
-    *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:13px/1.65 system-ui,-apple-system,"Noto Sans JP",sans-serif}
-    main{max-width:1270px;margin:auto;padding:20px 15px 48px}
-    .tabs{display:flex;margin-bottom:22px;border:1px solid #cbd7e8;border-radius:0;overflow:hidden;max-width:530px}
-    .tabs a{flex:1;text-align:center;text-decoration:none;padding:11px 12px;color:#345274;border-right:1px solid #cbd7e8;background:#fff;font-weight:700}
-    .tabs a:last-child{border-right:0}.tabs a.active{background:#2359bb;color:#fff}
-    header{display:flex;justify-content:space-between;align-items:start;gap:18px;flex-wrap:wrap;margin:15px 0}
-    h1{font-size:25px;margin:0}h2{font-size:17px;margin:0 0 10px}h3{font-size:14px;margin:2px 0 8px}
-    p{margin:5px 0 10px}.sub{color:var(--sub)}.mini{font-size:11px}
-    .card{background:#fff;border:1px solid var(--line);border-radius:10px;padding:18px;margin:12px 0}
-    .grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px}
-    .metric{padding:13px;background:#fff;border:1px solid var(--line);border-radius:8px;min-width:0}
-    .metric .key{color:var(--sub);font-size:11px}.metric .value{font-size:21px;font-weight:750;font-variant-numeric:tabular-nums}
-    .controls{display:flex;align-items:flex-end;gap:12px;flex-wrap:wrap}.control{display:flex;flex-direction:column;gap:5px;min-width:124px}
-    label{font-size:11px;font-weight:700;color:#53627a}select,input{padding:9px 10px;font:inherit;border:1px solid #b9c9dc;border-radius:5px;background:#fff}
-    button{padding:9px 15px;font:inherit;font-weight:700;border:1px solid #b9c9dc;border-radius:5px;background:#fff;color:var(--ink);cursor:pointer}
-    button.primary{background:#2359bb;border-color:#2359bb;color:#fff}button:disabled{opacity:.45;cursor:not-allowed}
-    .message{border:1px solid #d9e3f1;background:#f3f7fc;border-radius:6px;padding:12px 14px;margin:10px 0}
-    .warn{background:#fff7ed;border-color:#f2debf;color:#815327}
+    :root{--bg:#f6f8fb;--ink:#1e293b;--sub:#64748b;--line:#dce4ee;--blue:#245bc7;--green:#057b64;--red:#b33152}
+    *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:13px/1.6 system-ui,-apple-system,"Noto Sans JP",sans-serif}
+    main{max-width:1230px;margin:0 auto;padding:20px 15px 45px}
+    .tabs{display:flex;max-width:540px;border:1px solid #c8d8ed;margin-bottom:20px}
+    .tabs a{flex:1;text-align:center;padding:10px 8px;text-decoration:none;color:#345274;background:#fff;font-weight:700}
+    .tabs a+a{border-left:1px solid #c8d8ed}.tabs a.active{background:var(--blue);color:#fff}
+    h1{font-size:24px;margin:0}h2{font-size:16px;margin:0 0 10px}
+    p{margin:6px 0}.sub{color:var(--sub)}.mini{font-size:11px}
+    .card,.metric{border:1px solid var(--line);background:white;border-radius:8px}
+    .card{padding:17px;margin:12px 0}.metrics{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;margin:12px 0}
+    .metric{padding:12px;min-width:0}.metric .key{color:var(--sub);font-size:11px}
+    .metric .value{font-size:21px;font-weight:750;display:block;font-variant-numeric:tabular-nums}
+    .controls{display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap}
+    .control{display:flex;flex-direction:column;gap:4px;min-width:105px}
+    label{font-size:11px;font-weight:700;color:#53627a}
+    input,select,button{font:inherit;padding:9px;border-radius:5px;border:1px solid #bdcadb;background:white}
+    input[type=number]{width:100px}
+    button{font-weight:700;padding:9px 13px;cursor:pointer}button.primary{background:var(--blue);color:white;border-color:var(--blue)}
+    button:disabled{opacity:.45;cursor:not-allowed}
+    .message{border:1px solid #dce6f3;background:#f3f7fc;border-radius:6px;padding:11px 13px;margin:10px 0}
+    .warn{background:#fff7ec;border-color:#f0dcbe;color:#80572d}
     .two{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-    .scroll{overflow-x:auto}table{width:100%;min-width:750px;border-collapse:collapse;font-variant-numeric:tabular-nums}
-    th,td{padding:8px 10px;border-bottom:1px solid #e9eff5;text-align:right;white-space:nowrap}
-    th{font-size:11px;color:#5c6a7f;background:#f6f8fb}th:first-child,td:first-child{text-align:left}
+    svg{width:100%;height:auto;border:1px solid #e6ecf3;border-radius:6px}
+    .scroll{overflow-x:auto}table{border-collapse:collapse;min-width:740px;width:100%;font-variant-numeric:tabular-nums}
+    th,td{text-align:right;white-space:nowrap;padding:8px 9px;border-bottom:1px solid #e7edf4}
+    th{font-size:11px;background:#f4f7fa;color:#506078}th:first-child,td:first-child{text-align:left}
     .pos{color:var(--green);font-weight:700}.neg{color:var(--red);font-weight:700}
-    svg{width:100%;height:auto;background:#fff;border:1px solid #e4ebf5;border-radius:6px}
-    .mono{font-variant-numeric:tabular-nums}.pill{border:1px solid #cfdaed;border-radius:4px;background:#eaf1fc;padding:6px 10px;color:#37588c;font-size:11px}
-    @media(max-width:850px){.grid{grid-template-columns:repeat(3,1fr)}.two{grid-template-columns:1fr}}
-    @media(max-width:540px){main{padding:13px 9px}.card{padding:13px}h1{font-size:21px}.grid{grid-template-columns:repeat(2,1fr)}.metric .value{font-size:17px}}
+    @media(max-width:900px){.metrics{grid-template-columns:repeat(3,1fr)}.two{grid-template-columns:1fr}}
+    @media(max-width:540px){main{padding:12px 9px}.card{padding:12px}.metrics{grid-template-columns:repeat(2,1fr)}h1{font-size:21px}.metric .value{font-size:18px}}
   </style>
-  <script src="./episode-engine.js?v=1" defer></script>
-  <script src="./episode.js?v=1" defer></script>
+  <script src="./threshold-engine.js?v=1" defer></script>
+  <script src="./threshold.js?v=1" defer></script>
 </head>
-<body>
-<main>
+<body><main>
   <nav class="tabs" aria-label="研究モード">
-    <a href="./index.html">固定ルール検証</a><a class="active" aria-current="page" href="./episode.html">3日エピソード学習</a>
+    <a href="./index.html">固定ルール検証</a>
+    <a class="active" aria-current="page" href="./episode.html">x%・y%反復学習</a>
   </nav>
-  <header><div><div class="sub mini">STOCK STRATEGY LAB / 6976.T</div><h1>太陽誘電｜3日エピソード学習</h1>
-    <p class="sub">1分足を3取引日ずつ再生。取引ごとの正解を教えず、最終得点だけで売買方策を更新します。</p></div>
-    <span class="pill">方策探索（進化戦略）／買う・売る・待つ</span>
+  <header><div class="sub mini">STOCK STRATEGY LAB / 6976.T</div>
+    <h1>太陽誘電｜x%下落で買い・y%上昇で売り</h1>
+    <p class="sub">直近3取引日を繰り返し再生し、最後の得点を比較して下落率 x と利確率 y を改善します。</p>
   </header>
   <section class="card">
-    <h2>実データと学習の対象</h2>
-    <div id="dataMessage" class="message">GitHubに保存された1分足を読み込んでいます…</div>
-    <div id="examplePreview" class="message">実データを使った30回の試行例を読み込んでいます…</div>
-    <div class="grid">
-      <div class="metric"><div class="key">学習に使用する日数</div><div class="value" id="days">—</div></div>
-      <div class="metric"><div class="key">1分足の本数</div><div class="value" id="bars">—</div></div>
-      <div class="metric"><div class="key">累計エピソード</div><div class="value" id="episodes">0</div></div>
-      <div class="metric"><div class="key">現在の最高得点</div><div class="value" id="fitness">—</div></div>
-      <div class="metric"><div class="key">学習窓の期間</div><div class="value" id="range" style="font-size:13px">—</div></div>
-    </div>
-    <p class="mini sub">各候補は同じ最大3取引日を最初から再生し、口座状態・保有銘柄は毎回初期化します。次の試行に持ち越すのは方策パラメータと得点の履歴だけです。過去の価格データは学習記憶に保存しません。</p>
+    <h2>売買ルール</h2>
+    <p><strong>買い：</strong>直近30本の1分足の最高値から x% 下落した瞬間（1分足確定時）にシグナル。次の1分足の始値で買います。</p>
+    <p><strong>売り：</strong>買値から y% 上昇したら指値利確。上昇しなければ固定損切り −0.8%、最大25分保有、または前場・後場の終了で手仕舞いします。</p>
+    <p class="sub mini">指値と逆指値が同じ足で成立した場合は損切りを優先。1日最大6回の買い、売却後2分の間隔、場をまたぐ保有なし。価格と出来高は実データのみで、欠損箇所を補完しません。売買には往復コストを差し引きます。</p>
   </section>
   <section class="card">
-    <h2>学習を実行する</h2>
+    <h2>使用するデータ</h2>
+    <div id="dataMessage" class="message">GitHub保存データを読み込んでいます…</div>
+    <div id="previewMessage" class="message">実データでの最初の学習例を読み込んでいます…</div>
+    <div class="metrics">
+      <div class="metric"><span class="key">学習する取引日</span><span class="value" id="dayCount">—</span></div>
+      <div class="metric"><span class="key">1分足の本数</span><span class="value" id="barCount">—</span></div>
+      <div class="metric"><span class="key">最良 x（下落率）</span><span class="value" id="bestX">—</span></div>
+      <div class="metric"><span class="key">最良 y（利確率）</span><span class="value" id="bestY">—</span></div>
+      <div class="metric"><span class="key">最良得点</span><span class="value" id="bestScore">—</span></div>
+    </div>
+  </section>
+  <section class="card">
+    <h2>3日エピソードを繰り返す</h2>
     <div class="controls">
-      <div class="control"><label for="rounds">追加学習回数</label><select id="rounds"><option value="10">10回</option><option value="30" selected>30回</option><option value="60">60回</option></select></div>
-      <div class="control"><label for="population">1回あたりの候補方策</label><select id="population"><option value="8">8候補</option><option value="12" selected>12候補</option><option value="20">20候補</option></select></div>
-      <div class="control"><label for="cost">往復売買コスト（%）</label><input id="cost" type="number" value="0.10" min="0" max="2" step="0.01"></div>
-      <button id="start" class="primary" disabled>最初から学習</button>
+      <div class="control"><label for="initialX">初期 x（%）</label><input id="initialX" type="number" value="0.60" min="0.15" max="3" step="0.05"></div>
+      <div class="control"><label for="initialY">初期 y（%）</label><input id="initialY" type="number" value="0.50" min="0.10" max="2" step="0.05"></div>
+      <div class="control"><label for="rounds">繰り返す回数</label><select id="rounds"><option value="10">10回</option><option value="30" selected>30回</option><option value="60">60回</option></select></div>
+      <div class="control"><label for="population">1回の候補数</label><select id="population"><option value="8">8組</option><option value="12" selected>12組</option><option value="20">20組</option></select></div>
+      <div class="control"><label for="cost">往復コスト（%）</label><input id="cost" type="number" value="0.10" min="0" max="2" step="0.01"></div>
+      <button class="primary" id="start" disabled>最初から学習</button>
       <button id="continue" disabled>続きから学習</button>
-      <button id="reset" disabled>学習結果を初期化</button>
-      <button id="export" disabled>方策・得点を保存</button>
+      <button id="reset" disabled>結果を初期化</button>
+      <button id="export" disabled>x・yと履歴を保存</button>
     </div>
-    <div id="progress" class="message">まだ学習していません。</div>
-    <p class="mini sub">各方策は現在までのOHLCVと保有状況から「買い・売り・待つ」を判定し、シグナル確定後の次の1分足始値で売買します。損切り0.8%、利確1.0%、最大25本保有、1日最大6エントリーは安全上の共通制約です。得点＝コスト控除後の合計損益（%ポイント）−最大ドローダウン絶対値×0.5。売買0件は−0.9点。選択・更新に使うのはエピソード終了時の得点だけです。</p>
+    <div id="progress" class="message">未学習。開始ボタンで3取引日を繰り返します。</div>
+    <p class="mini sub">得点＝往復コスト控除後の売買損益合計（%ポイント）− 最大ドローダウンの半分。取引0件の候補は −0.9点。各候補の3日間が終わってから得点を比較し、x・yを更新します。過去の値動きを学習記憶に保存せず、x・yと得点のみ引き継ぎます。</p>
   </section>
-  <section class="two">
-    <div class="card">
-      <h2>最高得点の推移</h2>
-      <svg id="scoreChart" viewBox="0 0 640 260" role="img" aria-label="エピソード別最高得点の推移"><text x="20" y="38" fill="#64748b">学習後に表示</text></svg>
-      <p class="mini sub">同じ3日間の得点を繰り返し改善します。上昇しても初見の市場で利益が出る証拠にはなりません。</p>
-    </div>
-    <div class="card">
-      <h2>最高方策の学習期間内成績</h2>
-      <div class="grid" style="grid-template-columns:repeat(2,minmax(0,1fr))">
-        <div class="metric"><div class="key">合計損益</div><div class="value" id="profit">—</div></div>
-        <div class="metric"><div class="key">勝率</div><div class="value" id="winrate">—</div></div>
-        <div class="metric"><div class="key">取引数</div><div class="value" id="trades">—</div></div>
-        <div class="metric"><div class="key">最大DD</div><div class="value" id="dd">—</div></div>
+  <div class="two">
+    <section class="card"><h2>得点の推移（学習した同じ3日間）</h2>
+      <svg id="scoreChart" viewBox="0 0 640 260" role="img" aria-label="得点推移"><text x="20" y="36" fill="#64748b">学習後に表示</text></svg></section>
+    <section class="card"><h2>選ばれた x・y の学習期間内成績</h2>
+      <div class="metrics" style="grid-template-columns:repeat(2,minmax(0,1fr))">
+        <div class="metric"><span class="key">売買損益の合計</span><span class="value" id="total">—</span></div>
+        <div class="metric"><span class="key">勝率</span><span class="value" id="wins">—</span></div>
+        <div class="metric"><span class="key">取引回数</span><span class="value" id="trades">—</span></div>
+        <div class="metric"><span class="key">最大DD</span><span class="value" id="dd">—</span></div>
       </div>
-      <p class="mini sub">損益は1取引1単位の合計です。資金配分・複利は含みません。以下の学習成績は期間外検証ではありません。</p>
-    </div>
+      <p class="mini sub">同一期間でパラメータを探索した結果です。利益の再現性は証明していません。損益は1回ごとの率を単純合算した数値です。</p></section>
+  </div>
+  <section class="card"><h2>反復学習の記録</h2>
+    <div class="scroll"><table><thead><tr><th>回数</th><th>最高得点</th><th>当回平均点</th><th>x%</th><th>y%</th><th>損益</th><th>取引数</th><th>更新</th></tr></thead><tbody id="historyRows"><tr><td colspan="8" style="text-align:left">未実行</td></tr></tbody></table></div>
   </section>
-  <section class="card">
-    <h2>追加学習の記録</h2>
-    <div class="scroll"><table><thead><tr><th>回数</th><th>最高得点</th><th>当回候補の平均得点</th><th>当回最高得点</th><th>最高方策の損益</th><th>最大DD</th><th>取引数</th><th>更新</th></tr></thead><tbody id="historyRows"><tr><td colspan="8" style="text-align:left">未学習</td></tr></tbody></table></div>
+  <section class="card"><h2>売買履歴（学習した3日間）</h2>
+    <div class="scroll"><table><thead><tr><th>日付</th><th>買い時刻</th><th>買値</th><th>売り時刻</th><th>売値</th><th>決済理由</th><th>損益</th></tr></thead><tbody id="tradeRows"><tr><td colspan="7" style="text-align:left">未実行</td></tr></tbody></table></div>
   </section>
-  <section class="card">
-    <h2>最高方策の売買明細（学習期間内のみ）</h2>
-    <div class="scroll"><table><thead><tr><th>日付</th><th>買い時刻</th><th>買値</th><th>売り時刻</th><th>売値</th><th>理由</th><th>費用控除後損益</th></tr></thead><tbody id="tradeRows"><tr><td colspan="7" style="text-align:left">未学習</td></tr></tbody></table></div>
-  </section>
-  <section class="card">
-    <h2>新しく取得した日での初見検証</h2>
-    <div id="holdout" class="message">学習終了後に新しい取引日のデータが追加された場合、更新前の方策を使って新しい日だけで検証します。</div>
-    <p class="mini sub">過去の3日を繰り返した成果は「学習成績」です。新しい取引日の結果だけが期間外検証になります。データ更新後、追加学習前に初見結果を記録します。</p>
-  </section>
-  <footer class="mini sub">研究用の仮想取引です。再現性・約定・コスト・過剰最適化について実際の市場と差があります。方策・得点はブラウザ内に保持し、学習済みパラメータだけをJSON出力できます。</footer>
-</main>
-</body>
-</html>
+  <section class="card"><h2>未使用の新しい取引日で検証</h2>
+    <div class="message" id="holdout">学習した日より新しい日が保存されたら、パラメータを変更せずに評価します。</div>
+    <p class="mini sub">同じ3日間を何度回しても、そこは学習期間です。将来の値動きに対する有効性は、追加学習前の新しい取引日だけで判定します。</p></section>
+  <footer class="sub mini">研究用バックテストです。約定しない指値、スプレッド、出来高、株価分割、売買規制等で実績は異なります。投資判断を保証しません。</footer>
+</main></body></html>
