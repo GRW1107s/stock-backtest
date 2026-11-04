@@ -1,30 +1,13 @@
-name: Taiyo Yuden 1-minute backtest and Pages
+name: Retire standalone backtest Pages
 on:
   push:
     branches: [main]
     paths:
       - 'index.html'
-      - 'app.js'
-      - 'episode.html'
-      - 'episode.js'
-      - 'episode-engine.js'
-      - 'walkforward.html'
-      - 'walkforward.js'
-      - 'threshold.js'
-      - 'threshold-engine.js'
-      - 'xy-grid.js'
-      - 'five-minute.html'
-      - 'five-minute.js'
-      - 'five-minute-engine.js'
-      - 'data/**'
-      - 'scripts/**'
-      - 'tests/**'
       - '.github/workflows/site.yml'
   workflow_dispatch:
-  schedule:
-    - cron: '50 7 * * 1-5' # 16:50 JST, after Tokyo close
 permissions:
-  contents: write
+  contents: read
   pages: write
   id-token: write
 concurrency:
@@ -33,59 +16,12 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-      - name: Validate no-lookahead strategy engine
+      - name: Stage redirect-only site (all old analysis pages retired)
         run: |
-          node --check episode-engine.js
-          node --check episode.js
-          node --check walkforward.js
-          node --check scripts/walkforward_update.cjs
-          node --check threshold-engine.js
-          node --check threshold.js
-          node --check xy-grid.js
-          node --check scripts/xy_grid_search.cjs
-          node --check five-minute-engine.js
-          node --check five-minute.js
-          node --check scripts/five_minute_backtest.cjs
-          node --test tests/*.test.cjs
-      - name: Collect completed Taiyo Yuden one-minute bars
-        run: python scripts/update_1m.py
-      - name: Collect actual five-minute historical bars (Yahoo, up to 60 days)
-        run: python scripts/update_5m.py
-      - name: Record blind test before three-day incremental retraining
-        run: node scripts/walkforward_update.cjs
-      - name: Commit only verified archive updates
-        if: github.event_name != 'push'
-        run: |
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add data/taiyo-yuden-1m.json data/walkforward-state.json data/taiyo-yuden-5m.json
-          if ! git diff --cached --quiet; then
-            git commit -m 'data: append verified Taiyo Yuden 1m archive'
-            git push origin HEAD:main
-          fi
-      - name: Stage standalone site
-        run: |
-          mkdir -p site/data
-          cp index.html app.js episode.html threshold.js threshold-engine.js xy-grid.js walkforward.html walkforward.js five-minute.html five-minute.js site/
-          cp data/taiyo-yuden-1m.json data/walkforward-state.json data/taiyo-yuden-5m.json site/data/
-      - name: Run 30 x/y score-only episodes against archived actual candles
-        run: |
-          node scripts/threshold_preview.cjs > site/data/threshold-preview.json
-          cat site/data/threshold-preview.json
-      - name: Exhaustive x/y sweep with chronological train/test split
-        run: |
-          node scripts/xy_grid_search.cjs > site/data/xy-grid.json
-          node -e "const a=require('./site/data/xy-grid.json'); console.log(JSON.stringify({count:a.search.gridSize,dates:a.dates,trainingBest:a.trainingBest,test:a.testForTrainingBest,robust:a.trainingRobust,fullBest:a.fullBest,fullRobust:a.fullRobust},null,2))"
-      - name: Evaluate real 5-minute model on chronological holdouts
-        run: |
-          node scripts/five_minute_backtest.cjs > site/data/taiyo-yuden-5m-report.json
-          node -e "const r=require('./site/data/taiyo-yuden-5m-report.json'); console.log(JSON.stringify({status:r.status,barCount:r.candleCount,completeDays:r.completeDays,train:r.trainDays.length,test:r.testDays.length,bestTraining:r.bestTraining,holdout:r.holdout,oos:r.oos},null,2))"
+          mkdir -p site
+          cp index.html site/index.html
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v4
         with:
