@@ -1,0 +1,9 @@
+{
+  "symbol": "6976.T",
+  "interval": "5m",
+  "time_zone": "Asia/Tokyo",
+  "updated_at": null,
+  "source": "Yahoo Finance unofficial 5m; not yet retrieved",
+  "bars": [],
+  "fetch_errors": []
+}
