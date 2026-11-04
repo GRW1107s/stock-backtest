@@ -5,6 +5,9 @@ on:
     paths:
       - 'index.html'
       - 'app.js'
+      - 'episode.html'
+      - 'episode.js'
+      - 'episode-engine.js'
       - 'data/**'
       - 'scripts/**'
       - 'tests/**'
@@ -29,7 +32,7 @@ jobs:
         with:
           python-version: '3.12'
       - name: Validate no-lookahead strategy engine
-        run: node --test tests/backtest.test.cjs
+        run: node --test tests/*.test.cjs
       - name: Collect completed Taiyo Yuden one-minute bars
         run: python scripts/update_1m.py
       - name: Commit only verified archive updates
@@ -44,7 +47,7 @@ jobs:
       - name: Stage standalone site
         run: |
           mkdir -p site/data
-          cp index.html app.js site/
+          cp index.html app.js episode.html episode.js episode-engine.js site/
           cp data/taiyo-yuden-1m.json site/data/
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v4
